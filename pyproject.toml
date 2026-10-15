@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Predict the music of a film scene in latent space, then generate it."
 readme = "README.md"
 authors = [{ name = "Anton Demasles" }]
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "huggingface-hub>=1.33.0",

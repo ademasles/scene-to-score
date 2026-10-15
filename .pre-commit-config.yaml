@@ -19,3 +19,13 @@ repos:
       - id: trailing-whitespace
       - id: check-yaml
       - id: check-toml
+  # Keep uv.lock in sync with pyproject.toml.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.1
+    hooks:
+      - id: uv-lock
+  # Strip outputs and execution counts from notebooks before they are committed.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
