@@ -1,0 +1,53 @@
+[project]
+name = "scene-to-score"
+version = "0.1.0"
+description = "Predict the music of a film scene in latent space, then generate it."
+readme = "README.md"
+authors = [{ name = "Anton Demasles" }]
+requires-python = ">=3.13"
+dependencies = [
+    "huggingface-hub>=1.33.0",
+    "hydra-core>=1.3.7",
+    "numpy>=2.5.3",
+    "torch>=2.14.1",
+    "tqdm>=4.70.1",
+    "wandb>=0.30.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+# --- PyTorch: CUDA wheels come from the PyTorch index, never from PyPI -----------
+# Change "cu130" in both places to switch CUDA variant (see https://pytorch.org).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "NPY", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+include = ["src", "tests", "scripts"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.40.1",
+    "ipykernel>=7.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]

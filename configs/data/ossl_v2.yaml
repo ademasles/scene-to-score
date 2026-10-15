@@ -1,0 +1,14 @@
+# OSSL-v2 (Kim et al., 2026): 34,343 clips from 1,812 public-domain films, CC BY 4.0.
+# https://huggingface.co/datasets/McAuley-Lab/OSSL-v2
+repo_id: McAuley-Lab/OSSL-v2
+revision: 3ed5a37d933084e5ec134e2138b8faa156cf021b   # dataset version of 2026-08-13
+download_workers: 8
+
+# Movie-level subset: about 135 MB per movie. null keeps every movie of the split (180 GB).
+n_train_movies: 20
+n_test_movies: 5
+subset_seed: 0
+
+# Fixed-length segments cut inside each clip (clips last at least 10 s).
+segment_s: 10.0
+hop_s: 10.0
