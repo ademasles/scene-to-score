@@ -1,117 +1,116 @@
-# Plan du projet scene-to-score
+# scene-to-score project plan
 
-Version du 15 octobre 2026. Hypothèse de travail : six semaines, trois ou quatre personnes. À
-recaler dès que la date de rendu et la taille du groupe sont fixées.
+Version of 15 October 2026. Working assumption: six weeks, three or four people. To be adjusted
+once the deadline and the group size are fixed.
 
-## La question
+## The question
 
-À partir de la représentation d'une scène de film, peut-on prédire celle de sa musique assez bien
-pour la retrouver parmi d'autres, et pour en générer une qui lui ressemble ?
+From the representation of a film scene, can we predict the representation of its music well
+enough to retrieve it among others, and to generate music that resembles it?
 
-Une même scène accepte plusieurs musiques. Une prédiction naïve renvoie la musique moyenne. Le
-projet compare les façons d'éviter cet effondrement.
+A single scene admits several musics. A naive prediction returns the average music. The project
+compares ways to avoid that collapse.
 
-## La chaîne
+## The pipeline
 
-1. Extrait de film, découpé en segments de 10 s.
-2. Encodeur vidéo gelé : un encodeur d'images appliqué image par image (DINOv2), et V-JEPA 2.
-3. Projection entraînée vers l'espace musical. Trois objectifs comparés : régression,
-   contrastif, et en option un petit modèle génératif sur les vecteurs.
-4. Vecteur musical CLAP, celui du modèle CLAP livré avec MusicLDM.
-5. MusicLDM gelé, qui génère 10 s d'audio à partir du vecteur prédit.
+1. Film clip, cut into 10 s segments.
+2. Frozen video encoder: an image encoder applied frame by frame (DINOv2), and V-JEPA 2.
+3. Trained projection into the music space. Three objectives compared: regression, contrastive,
+   and optionally a small generative model over the vectors.
+4. CLAP music vector, from the CLAP model shipped with MusicLDM.
+5. Frozen MusicLDM, which generates 10 s of audio from the predicted vector.
 
-Référence sans entraînement : décrire la scène en une phrase, puis donner cette phrase au même
-générateur.
+Training-free baseline: describe the scene in one sentence, then give that sentence to the same
+generator.
 
-## Où tourne quoi
+## What runs where
 
-| Machine | Usage |
+| Machine | Use |
 |---|---|
-| Portable (RTX 4070, 8 Go ; environ 30 Go libres sous WSL) | Développement et tests sur 20 à 30 films |
-| Tech lab (jusqu'à 48 Go de mémoire GPU) | Téléchargement complet (180 Go), extraction complète, entraînements à plusieurs graines, génération |
+| Laptop (RTX 4070, 8 GB; about 30 GB free under WSL) | Development and tests on 20 to 30 films |
+| Tech lab (up to 48 GB of GPU memory) | Full download (180 GB), full extraction, multi-seed training, generation |
 
-Le code est identique sur les deux machines. Seuls changent l'emplacement des données
-(`STS_DATA_DIR`) et la taille des lots.
+The code is identical on both machines. Only the data location (`STS_DATA_DIR`) and the batch
+size change.
 
-À préciser sur le tech lab avant la semaine 2 :
+To clarify on the tech lab before week 2:
 
-- système et ordonnanceur de tâches (accès direct en SSH ou file d'attente) ;
-- quota disque, pour les 180 Go de données et quelques gigaoctets de caractéristiques ;
-- accès à internet depuis les machines de calcul, pour Hugging Face et uv ;
-- modèle exact de la carte.
+- system and job scheduler (direct SSH access or a queue);
+- disk quota, for the 180 GB of data and a few gigabytes of features;
+- internet access from the compute nodes, for Hugging Face and uv;
+- exact GPU model.
 
-## Calendrier
+## Schedule
 
-| Semaine | Tâches | Machine | Jalon |
+| Week | Tasks | Machine | Milestone |
 |---|---|---|---|
-| 1 | Socle du dépôt et téléchargement d'un sous-ensemble (faits) ; écoute de 50 extraits ; environnement sur le tech lab | Portable, tech lab | La piste audio contient surtout de la musique |
-| 2 | Extraction des vecteurs vidéo et musique, mesure du temps par segment ; référence par le texte | Portable puis tech lab | Vecteurs en cache pour tout le jeu |
-| 3 | Projections par régression et contrastive ; évaluation par le rang ; diagnostic d'effondrement | Tech lab | Premier tableau objectifs × encodeurs |
-| 4 | Branchement sur MusicLDM ; génération sur le jeu de test ; début du rapport | Tech lab | Démo, première version |
-| 5 | Évaluation complète à trois graines ; test hors domaine sur V2M-bench ; test d'écoute | Tech lab | Toutes les figures |
-| 6 | Rapport, soutenance, démo finale, nettoyage du dépôt | Portable | Code gelé en début de semaine |
+| 1 | Repository scaffold and subset download (done); listen to 50 clips; tech lab environment | Laptop, tech lab | The audio track is mostly music |
+| 2 | Extract video and music vectors, measure time per segment; text baseline | Laptop then tech lab | Vectors cached for the whole dataset |
+| 3 | Regression and contrastive projections; rank-based evaluation; collapse diagnosis | Tech lab | First objectives × encoders table |
+| 4 | Plug into MusicLDM; generation on the test set; start the report | Tech lab | Demo, first version |
+| 5 | Full evaluation with three seeds; out-of-domain test on V2M-bench; listening test | Tech lab | All figures |
+| 6 | Report, defence, final demo, repository cleanup | Laptop | Code frozen at the start of the week |
 
-En cas de retard, couper dans cet ordre : le modèle génératif sur les vecteurs, le test
-d'écoute, le test hors domaine. Le tableau objectifs × encodeurs ne se coupe pas.
+If running late, cut in this order: the generative model over vectors, the listening test, the
+out-of-domain test. The objectives × encoders table is never cut.
 
-## Répartition, à attribuer
+## Team split, to assign
 
-| Rôle | Contenu |
+| Role | Contents |
 |---|---|
-| Données et évaluation | Sous-ensembles, écoute de contrôle, métriques de rang et de dispersion, test d'écoute |
-| Encodeurs et extraction | DINOv2, V-JEPA 2, CLAP, mise en cache, mesures de temps |
-| Projection et entraînement | Objectifs, sélection de modèle, balayages au tech lab |
-| Génération et démo | MusicLDM, référence par le texte, démo |
+| Data and evaluation | Subsets, sanity listening, rank and dispersion metrics, listening test |
+| Encoders and extraction | DINOv2, V-JEPA 2, CLAP, caching, timing |
+| Projection and training | Objectives, model selection, sweeps on the tech lab |
+| Generation and demo | MusicLDM, text baseline, demo |
 
-Tout le monde écrit le rapport à partir de la semaine 4.
+Everyone writes the report from week 4.
 
-## Calcul estimé
+## Estimated compute
 
-Estimations, pas des mesures, pour tout OSSL-v2 (environ 85 000 segments de 10 s) sur le
-portable. Le tech lab va plusieurs fois plus vite.
+Estimates, not measurements, for the whole of OSSL-v2 (about 85,000 segments of 10 s) on the
+laptop. The tech lab is several times faster.
 
-| Étape | Temps estimé |
+| Step | Estimated time |
 |---|---|
-| Encodeur d'images (1 image par seconde) | 1 à 2 h |
-| V-JEPA 2 ViT-L (16 images par segment) | 2 à 4 h |
-| CLAP sur la musique | moins de 30 min |
-| 18 entraînements de projection (3 objectifs × 2 encodeurs × 3 graines) | 2 à 5 h au total |
-| Génération d'environ 1 000 extraits | 1 à 4 h |
+| Image encoder (1 frame per second) | 1 to 2 h |
+| V-JEPA 2 ViT-L (16 frames per segment) | 2 to 4 h |
+| CLAP on the music | under 30 min |
+| 18 projection trainings (3 objectives × 2 encoders × 3 seeds) | 2 to 5 h in total |
+| Generation of about 1,000 clips | 1 to 4 h |
 
-Les goulots sont le disque et la bande passante, pas le GPU. Mesurer le temps par segment sur
-une centaine de segments en semaine 2, puis extrapoler.
+The bottlenecks are disk and bandwidth, not the GPU. Measure time per segment on about a hundred
+segments in week 2, then extrapolate.
 
-## Notes techniques relevées
+## Technical notes
 
-- **Identifiants d'extraits** : début et fin en centièmes de seconde, vérifié sur un extrait.
-- **Audio d'OSSL-v2** : mono, 44,1 kHz. Le CLAP de MusicLDM attend du 48 kHz : rééchantillonner.
-- **MusicLDM** : le pipeline est rangé dans `diffusers.pipelines.deprecated` (diffusers 0.41).
-  Avec transformers 5, `ClapModel.get_text_features` renvoie un objet de sortie
-  (`.pooler_output`) et non un tenseur, ce que le pipeline n'attend pas. Il faut lui passer
-  soi-même `prompt_embeds` et `negative_prompt_embeds`, ce dernier étant le vecteur du texte
-  vide. Constaté à la lecture du code des versions installées, pas encore exécuté.
-- **Vecteurs CLAP** : texte et audio sortent normalisés (norme 1) dans transformers 5.
-- **V-JEPA 2** : `get_vision_features(pixel_values_videos)` dans transformers. Moyenner les
-  jetons sur l'espace avant de les stocker : environ 4 Mo par segment sinon, contre 16 Ko.
-- **Décodage vidéo** : ffmpeg n'est pas installé sous WSL. PyAV embarque ses propres
-  bibliothèques et évite d'en dépendre.
-- **Segments d'un même extrait** : ils partagent leur musique. À l'évaluation, n'en garder
-  qu'un par extrait ; à l'entraînement contrastif, ils créent de faux négatifs.
+- **Clip ids**: start and end in hundredths of a second, checked on one clip.
+- **OSSL-v2 audio**: mono, 44.1 kHz. MusicLDM's CLAP expects 48 kHz: resample.
+- **MusicLDM**: the pipeline lives in `diffusers.pipelines.deprecated` (diffusers 0.41). With
+  transformers 5, `ClapModel.get_text_features` returns an output object (`.pooler_output`), not
+  a tensor, which the pipeline does not expect. Pass `prompt_embeds` and `negative_prompt_embeds`
+  yourself, the latter being the vector of the empty text. Found by reading the code of the
+  installed versions, not yet run.
+- **CLAP vectors**: text and audio come out normalised (unit norm) in transformers 5.
+- **V-JEPA 2**: `get_vision_features(pixel_values_videos)` in transformers. Average the tokens
+  over space before storing them: about 4 MB per segment otherwise, against 16 KB.
+- **Video decoding**: ffmpeg is not installed under WSL. PyAV ships its own libraries and avoids
+  depending on it.
+- **Segments of the same clip** share their music. At evaluation, keep only one per clip; in
+  contrastive training, they create false negatives.
 
-## Risques
+## Risks
 
-1. Films anciens (62 % des années 1930 et 1940) : le transfert vers des vidéos récentes est
-   incertain. Le test sur V2M-bench le mesure.
-2. La musique séparée garde des sons non musicaux, selon les auteurs du jeu.
-3. La régression s'effondrera probablement vers la moyenne : c'est l'objet de la comparaison.
-4. MusicLDM a appris sur de la musique récente ; la mesure par le rang n'en dépend pas.
-5. La similarité entre musiques est calculée dans l'espace qui sert à prédire ; le test
-   d'écoute sert de contrôle indépendant.
+1. Old films (62% from the 1930s and 1940s): transfer to recent videos is uncertain. The
+   V2M-bench test measures it.
+2. The separated music still contains non-musical sounds, according to the dataset authors.
+3. Regression will probably collapse to the mean: that is the point of the comparison.
+4. MusicLDM was trained on recent music; the rank metric does not depend on it.
+5. Music similarity is computed in the space used for prediction; the listening test is an
+   independent check.
 
-## Terminé quand
+## Done when
 
-- Le tableau objectifs × encodeurs existe, sur OSSL-v2 et sur V2M-bench, à trois graines.
-- La démo tourne : une scène, la musique produite, la musique d'origine et celle de la
-  référence par le texte.
-- Le dépôt se relance de zéro avec les commandes du README.
-- Le rapport fait quatre à six pages.
+- The objectives × encoders table exists, on OSSL-v2 and V2M-bench, with three seeds.
+- The demo runs: a scene, the generated music, the original music and the text baseline's music.
+- The repository runs from scratch with the README commands.
+- The report is four to six pages long.

@@ -2,99 +2,97 @@
 
 [![CI](https://github.com/ademasles/scene-to-score/actions/workflows/ci.yml/badge.svg)](https://github.com/ademasles/scene-to-score/actions/workflows/ci.yml)
 
-Prédire la musique d'une scène de film dans l'espace latent, puis la générer.
+Predict the music of a film scene in latent space, then generate it.
 
-Projet multimodal (vidéo vers musique) du cours de deep learning avancé. Les données viennent
-d'OSSL-v2 (Kim et al., 2026) : 34 343 extraits de 1 812 films du domaine public, avec leur
-musique séparée du dialogue, sous licence CC BY 4.0.
+Multimodal (video to music) project of the Advanced Deep Learning course. The data comes from
+OSSL-v2 (Kim et al., 2026): 34,343 clips from 1,812 public-domain films, with their music
+separated from the dialogue, under a CC BY 4.0 licence.
 
-Le plan de travail est dans [docs/plan.md](docs/plan.md).
+The work plan is in [docs/plan.md](docs/plan.md).
 
-## Démarrage
+## Getting started
 
-Prérequis : Linux, macOS sur puce Apple ou WSL2, avec git, [uv](https://docs.astral.sh/uv/) et
-[just](https://just.systems) (voir [Installation des outils](#installation-des-outils)). Un GPU
-NVIDIA accélère les calculs ; 8 Go suffisent pour développer.
+Requirements: Linux, macOS on Apple silicon or WSL2, with git, [uv](https://docs.astral.sh/uv/)
+and [just](https://just.systems) (see [Installing the tools](#installing-the-tools)). An NVIDIA
+GPU speeds up compute; 8 GB is enough for development.
 
 ```bash
-just sync        # crée .venv depuis uv.lock
-just gpu         # vérifie que PyTorch voit le GPU
+just sync        # create .venv from uv.lock
+just gpu         # check that PyTorch sees the GPU
 just check       # ruff + basedpyright + pytest
-just download    # index OSSL-v2, 20 films d'entraînement et 5 de test (environ 3,4 Go)
-uv run pre-commit install   # une fois après le clone
+just download    # OSSL-v2 index, 20 training films and 5 test films (about 3.4 GB)
+uv run pre-commit install   # once after cloning
 ```
 
-Tout télécharger représente 180 Go, à réserver au tech lab :
+Downloading everything takes 180 GB; keep that for the tech lab:
 
 ```bash
 just download data.n_train_movies=null data.n_test_movies=null
 ```
 
-## Installation des outils
+## Installing the tools
 
-Une seule fois par machine, sans droits administrateur. Python n'a pas besoin d'être installé :
-uv télécharge la version fixée dans `.python-version`.
+Once per machine, no admin rights needed. Python does not need to be installed: uv downloads the
+version pinned in `.python-version`.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh   # uv, macOS et Linux
-uv tool install rust-just                         # just, distribué par uv
+curl -LsSf https://astral.sh/uv/install.sh | sh   # uv, macOS and Linux
+uv tool install rust-just                         # just, distributed through uv
 ```
 
-Sur macOS avec Homebrew, `brew install uv just` fait la même chose. Ouvrir ensuite un nouveau
-terminal et vérifier avec `uv --version` et `just --version`.
+On macOS with Homebrew, `brew install uv just` does the same. Then open a new terminal and check
+with `uv --version` and `just --version`.
 
-Limites selon la machine :
+Limits depending on the machine:
 
-- PyTorch n'est publié pour macOS que sur puce Apple (M1 et suivantes), sous macOS 14 ou plus
-  récent. Sur un Mac Intel, travailler sur une machine Linux ou au tech lab.
-- Sur Mac, il n'y a pas de CUDA : le code tourne sur le processeur. Les gros calculs se font au
-  tech lab.
-- Sous Linux avec un GPU NVIDIA, il faut un pilote compatible CUDA 13 ; `just gpu` le vérifie.
+- PyTorch is only published for macOS on Apple silicon (M1 and later), on macOS 14 or newer. On
+  an Intel Mac, work on a Linux machine or on the tech lab.
+- On a Mac there is no CUDA: code runs on the CPU. Heavy compute happens on the tech lab.
+- On Linux with an NVIDIA GPU, you need a CUDA 13 compatible driver; `just gpu` checks it.
 
-`just` n'est qu'un raccourci : chaque recette du `justfile` est une commande `uv run` que l'on
-peut taper directement, par exemple `uv run pytest`.
+`just` is only a shortcut: each recipe in the `justfile` is a `uv run` command that can be typed
+directly, for example `uv run pytest`.
 
-## Organisation
+## Layout
 
-| Chemin | Contenu |
+| Path | Contents |
 |---|---|
-| `src/scene_to_score/data/` | Index OSSL-v2 (`ossl.py`) et téléchargement (`download.py`) |
-| `src/scene_to_score/seed.py` | Graines et choix du périphérique |
-| `configs/` | Configuration Hydra : chemins, données |
-| `scripts/` | Scripts ponctuels (`gpu_check.py`) |
-| `notebooks/` | Exploration ; `just kernel` enregistre l'environnement dans Jupyter |
+| `src/scene_to_score/data/` | OSSL-v2 index (`ossl.py`) and download (`download.py`) |
+| `src/scene_to_score/seed.py` | Seeding and device selection |
+| `configs/` | Hydra configuration: paths, data |
+| `scripts/` | One-off scripts (`gpu_check.py`) |
+| `notebooks/` | Exploration; `just kernel` registers the environment with Jupyter |
 | `tests/` | pytest |
-| `docs/` | Plan du projet |
-| `data/`, `outputs/` | Données et sorties d'expériences, ignorées par git |
+| `docs/` | Project plan |
+| `data/`, `outputs/` | Data and experiment outputs, ignored by git |
 
-## Données
+## Data
 
-- Les données vont dans `data/`. Sur une autre machine, `export STS_DATA_DIR=/chemin/vers/data`.
-- La version du jeu est figée dans `configs/data/ossl_v2.yaml` (révision du 13 août 2026).
-- Les identifiants d'extraits ont la forme `<film>_<index>_<début>_<fin>`, avec le début et la
-  fin en centièmes de seconde.
-- Le découpage entraînement/test est fait par film : aucun film n'apparaît des deux côtés.
-- Hugging Face limite le débit des téléchargements anonymes ; `hf auth login` lève cette limite.
-  Le jeton reste hors du dépôt.
+- Data goes to `data/`. On another machine, `export STS_DATA_DIR=/path/to/data`.
+- The dataset version is pinned in `configs/data/ossl_v2.yaml` (revision of 13 August 2026).
+- Clip ids look like `<film>_<index>_<start>_<end>`, with start and end in hundredths of a
+  second.
+- The train/test split is by film: no film appears on both sides.
+- Hugging Face rate-limits anonymous downloads; `hf auth login` lifts that limit. The token stays
+  out of the repository.
 
 ## Conventions
 
-- Dépendances : `uv add <paquet>`, outils de développement : `uv add --dev <paquet>`. Jamais
-  `pip install`.
-- PyTorch vient de l'index CUDA déclaré dans `pyproject.toml`.
-- Toute expérience est seedée et configurée par Hydra ; les surcharges passent en ligne de
-  commande, par exemple `just download data.n_train_movies=50`.
-- Ni données, ni points de contrôle, ni secrets dans git ; `gitleaks` tourne en pre-commit.
-- Les hooks pre-commit tiennent aussi `uv.lock` à jour (`uv-lock`) et vident les sorties des
-  notebooks (`nbstripout`).
-- L'intégration continue relance `just check` et tous les hooks à chaque push sur `main` et à
-  chaque pull request.
-- Code, commentaires et messages de commit en anglais, au format des commits conventionnels.
+- Dependencies: `uv add <package>`, dev tools: `uv add --dev <package>`. Never `pip install`.
+- PyTorch comes from the CUDA index declared in `pyproject.toml`.
+- Every experiment is seeded and configured through Hydra; overrides go on the command line, for
+  example `just download data.n_train_movies=50`.
+- No data, checkpoints or secrets in git; `gitleaks` runs as a pre-commit hook.
+- The pre-commit hooks also keep `uv.lock` up to date (`uv-lock`) and strip notebook outputs
+  (`nbstripout`).
+- Continuous integration reruns `just check` and every hook on each push to `main` and on each
+  pull request.
+- Code, comments and commit messages in English, following Conventional Commits.
 
 ## Licences
 
-Le code est sous licence MIT (voir [LICENSE](LICENSE)).
+The code is released under the MIT licence (see [LICENSE](LICENSE)).
 
-Les données OSSL-v2 sont distribuées sous CC BY 4.0. Citer Kim, Novack, McAuley et Dong (2026),
+The OSSL-v2 data is distributed under CC BY 4.0. Cite Kim, Novack, McAuley and Dong (2026),
 *Dialogue-Aware Video-to-Music Generation Using Public Domain Film Collections*,
 arXiv:2608.11576.
