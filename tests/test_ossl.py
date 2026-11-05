@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from scene_to_score.data.ossl import (
+    evaluation_segment,
     media_patterns,
     parse_clip_id,
     segment_clip,
@@ -69,3 +70,11 @@ def test_subset_reads_split_files(tmp_path: Path) -> None:
 def test_media_patterns_cover_video_and_audio_once_per_movie() -> None:
     clips = [parse_clip_id("3_0_0_1500", "train"), parse_clip_id("3_1_0_1500", "train")]
     assert media_patterns(clips) == ["train/audio/3/*", "train/video/3/*"]
+
+
+def test_evaluation_segment_is_the_middle_one() -> None:
+    segments = segment_clip(parse_clip_id("7_2_0_3000", "train"), 10.0, 5.0)
+    assert evaluation_segment(segments).segment_id == "7_2_0_3000@1000"
+    assert evaluation_segment(segments[:2]).segment_id == "7_2_0_3000@500"
+    with pytest.raises(ValueError):
+        evaluation_segment([])
