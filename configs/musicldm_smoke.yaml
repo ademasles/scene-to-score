@@ -1,0 +1,19 @@
+# A2: does MusicLDM produce sensible music from a CLAP *audio* vector? Run with
+# `just musicldm-smoke`; listen to the wav files in the run directory.
+defaults:
+  - paths: default
+  - data: ossl_v2
+  - _self_
+
+split: test
+n_generate: 5       # real CLAP vectors turned into music, one per clip
+n_mean: 10          # clips averaged into one out-of-distribution vector, as a prediction would be
+model_id: ucsd-reach/musicldm
+half: true          # float16 on CUDA, ignored elsewhere
+steps: 200
+guidance: 2.0
+seed: 0
+
+hydra:
+  run:
+    dir: outputs/musicldm_smoke/${now:%Y-%m-%d}/${now:%H-%M-%S}

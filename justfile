@@ -34,3 +34,7 @@ kernel:
 # recipe name, e.g. `just download data.n_train_movies=50`
 download *ARGS:
     uv run python -m scene_to_score.data.download {{ARGS}}
+
+# A2: MusicLDM from CLAP audio vectors; writes wav files and summary.json under outputs/
+musicldm-smoke *ARGS:
+    uv run python scripts/musicldm_smoke.py {{ARGS}}
