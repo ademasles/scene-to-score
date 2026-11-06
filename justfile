@@ -34,3 +34,7 @@ kernel:
 # recipe name, e.g. `just download data.n_train_movies=50`
 download *ARGS:
     uv run python -m scene_to_score.data.download {{ARGS}}
+
+# A3: cache video tokens, e.g. `just extract-video encoder=vjepa2-large max_segments=100`
+extract-video *ARGS:
+    uv run python -m scene_to_score.features.video {{ARGS}}

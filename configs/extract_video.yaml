@@ -1,0 +1,18 @@
+# A3: frozen video encoders. Timing run on ~100 segments:
+#   just extract-video encoder=vjepa2-large max_segments=100 splits=[test]
+defaults:
+  - paths: default
+  - data: ossl_v2
+  - _self_
+
+encoder: dinov2-large   # or vjepa2-large (see scene_to_score.features.video.ENCODERS)
+splits: [train, test]
+n_frames: 16            # same frames for both encoders; V-JEPA 2 turns them into 8 tubelets
+batch_size: 8
+max_segments: null      # cap per split, for timing runs; recorded as partial in meta.json
+gray: false             # colour ablation: writes to video/<encoder>-gray
+half: true
+
+hydra:
+  run:
+    dir: outputs/extract_video/${now:%Y-%m-%d}/${now:%H-%M-%S}
