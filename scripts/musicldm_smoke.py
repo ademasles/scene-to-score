@@ -1,14 +1,16 @@
 """A2 smoke test: MusicLDM conditioned on CLAP audio vectors through ``prompt_embeds``.
 
-For a few test clips, embed the real music (middle segment) with MusicLDM's own CLAP, generate
-10 s from that vector, and also from the mean of ``n_mean`` vectors (off the data manifold, like
-a model's prediction). Writes the real and generated audio for listening, plus ``summary.json``:
-seconds per generation and a round trip, CLAP(generated) against the conditioning vectors.
+For a few test clips, one movie at a time, embed the real music (middle segment) with
+MusicLDM's own CLAP, generate 10 s from that vector, and also from the mean of ``n_mean``
+vectors (off the data manifold, like a model's prediction). Writes the real and generated audio
+for listening, plus ``summary.json``: seconds per generation and a round trip, CLAP(generated)
+against the conditioning vectors.
 """
 
 import json
 import logging
 import time
+from itertools import zip_longest
 from pathlib import Path
 
 import hydra
@@ -18,7 +20,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 
 from scene_to_score.audio import load_audio, resample, write_wav
-from scene_to_score.data.ossl import evaluation_segment, segment_clip, subset
+from scene_to_score.data.ossl import Segment, evaluation_segment, segment_clip, subset
 from scene_to_score.generation import (
     audio_embedding,
     cosine_matrix,
@@ -50,11 +52,17 @@ def main(cfg: DictConfig) -> None:
     # Only clips whose audio is on disk: the subset may be only partly downloaded.
     present = [c for c in sorted(clips, key=lambda c: c.clip_id) if c.audio_path(root).exists()]
     log.info("%d of %d %s clips have their audio in %s", len(present), len(clips), cfg.split, root)
-    segments = [
+    usable = [
         evaluation_segment(s)
         for clip in present
         if (s := segment_clip(clip, cfg.data.segment_s, cfg.data.hop_s))
-    ][: cfg.n_mean]
+    ]
+    # Round-robin over movies: clips of one movie share a score and would look alike.
+    by_movie: dict[int, list[Segment]] = {}
+    for segment in usable:
+        by_movie.setdefault(segment.clip.movie_id, []).append(segment)
+    rounds = zip_longest(*by_movie.values())
+    segments = [s for row in rounds for s in row if s is not None][: cfg.n_mean]
     if len(segments) < max(cfg.n_generate, 2):
         raise ValueError(
             f"only {len(segments)} usable {cfg.split} clips in {root}: run `just download`"
