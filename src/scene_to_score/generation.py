@@ -27,7 +27,7 @@ def load_pipeline(
 ) -> MusicLDMPipeline:
     device = device or torch.device("cpu")
     dtype = torch.float16 if half and device.type == "cuda" else torch.float32
-    pipe = MusicLDMPipeline.from_pretrained(model_id, torch_dtype=dtype)
+    pipe = MusicLDMPipeline.from_pretrained(model_id, dtype=dtype)
     if pipe.feature_extractor is None:
         raise ValueError(f"{model_id} ships no CLAP feature extractor")
     return pipe.to(device)

@@ -47,13 +47,18 @@ def main(cfg: DictConfig) -> None:
         {"train": cfg.data.n_train_movies, "test": cfg.data.n_test_movies},
         cfg.data.subset_seed,
     )[cfg.split]
+    # Only clips whose audio is on disk: the subset may be only partly downloaded.
+    present = [c for c in sorted(clips, key=lambda c: c.clip_id) if c.audio_path(root).exists()]
+    log.info("%d of %d %s clips have their audio in %s", len(present), len(clips), cfg.split, root)
     segments = [
         evaluation_segment(s)
-        for clip in sorted(clips, key=lambda c: c.clip_id)
+        for clip in present
         if (s := segment_clip(clip, cfg.data.segment_s, cfg.data.hop_s))
     ][: cfg.n_mean]
     if len(segments) < max(cfg.n_generate, 2):
-        raise ValueError(f"only {len(segments)} usable clips in {root}")
+        raise ValueError(
+            f"only {len(segments)} usable {cfg.split} clips in {root}: run `just download`"
+        )
 
     device = pick_device()
     pipe = load_pipeline(cfg.model_id, device, half=cfg.half)
