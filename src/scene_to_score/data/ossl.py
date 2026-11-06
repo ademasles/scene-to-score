@@ -7,7 +7,7 @@ Media files sit at ``<split>/{video,audio}/<movie_id>/<clip_id>.{mp4,wav}``.
 """
 
 import random
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,6 +94,17 @@ def segment_clip(clip: Clip, segment_s: float, hop_s: float) -> list[Segment]:
         return []
     count = int((clip.duration_s - segment_s + 1e-6) // hop_s) + 1
     return [Segment(clip, i * hop_s, i * hop_s + segment_s) for i in range(count)]
+
+
+def evaluation_segment(segments: Sequence[Segment]) -> Segment:
+    """The one segment of a clip that is evaluated: the middle one.
+
+    Segments of a clip share their music, so evaluating all of them would count a clip several
+    times.
+    """
+    if not segments:
+        raise ValueError("clip has no full segment")
+    return segments[len(segments) // 2]
 
 
 def media_patterns(clips: Iterable[Clip]) -> list[str]:
