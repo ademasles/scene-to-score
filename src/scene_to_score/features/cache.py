@@ -74,8 +74,13 @@ def write_features(
     meta: Mapping[str, Any],
     *,
     dtype: np.dtype | type = np.float16,
+    split_info: Mapping[str, Any] | None = None,
 ) -> None:
-    """Write one split of encoder inputs, cast to ``dtype`` (float16 by default)."""
+    """Write one split of encoder inputs, cast to ``dtype`` (float16 by default).
+
+    ``meta`` describes the encoder and must agree across splits; ``split_info`` (timings,
+    counts) is recorded for this split only.
+    """
     with np.errstate(over="ignore"):  # overflow becomes inf, refused just below
         arrays = {"pooled": features.pooled.astype(dtype)}
         if features.tokens is not None and features.mask is not None:
@@ -88,7 +93,7 @@ def write_features(
     _write_ids(directory, split, features.ids)
     for name, array in arrays.items():
         np.save(directory / f"{split}_{name}.npy", array)
-    _update_meta(directory, split, len(features.ids), meta)
+    _update_meta(directory, split, len(features.ids), meta, split_info)
 
 
 def read_features(directory: Path, split: str, *, mmap: bool = True) -> Features:
@@ -105,7 +110,13 @@ def read_features(directory: Path, split: str, *, mmap: bool = True) -> Features
 
 
 def write_targets(
-    directory: Path, split: str, ids: Sequence[str], z: np.ndarray, meta: Mapping[str, Any]
+    directory: Path,
+    split: str,
+    ids: Sequence[str],
+    z: np.ndarray,
+    meta: Mapping[str, Any],
+    *,
+    split_info: Mapping[str, Any] | None = None,
 ) -> None:
     """Write one split of unit-norm target vectors in float32."""
     check_ids(ids)
@@ -116,7 +127,7 @@ def write_targets(
     directory.mkdir(parents=True, exist_ok=True)
     _write_ids(directory, split, ids)
     np.save(directory / f"{split}_z.npy", z)
-    _update_meta(directory, split, len(ids), meta)
+    _update_meta(directory, split, len(ids), meta, split_info)
 
 
 def read_targets(directory: Path, split: str) -> tuple[list[str], np.ndarray]:
@@ -154,7 +165,13 @@ def _read_ids(directory: Path, split: str) -> list[str]:
     return (directory / f"{split}_ids.txt").read_text().split()
 
 
-def _update_meta(directory: Path, split: str, n: int, meta: Mapping[str, Any]) -> None:
+def _update_meta(
+    directory: Path,
+    split: str,
+    n: int,
+    meta: Mapping[str, Any],
+    split_info: Mapping[str, Any] | None = None,
+) -> None:
     """Merge ``meta`` into meta.json; a key already set to another value is an error.
 
     This stops two encoders, or two preprocessing settings, from sharing a directory.
@@ -167,5 +184,6 @@ def _update_meta(directory: Path, split: str, n: int, meta: Mapping[str, Any]) -
         if key in current and current[key] != value:
             raise ValueError(f"{path}: {key!r} is {current[key]!r}, refusing {value!r}")
         current[key] = value
-    current.setdefault("splits", {})[split] = {"n": n, "git_commit": git_commit()}
+    info = json.loads(json.dumps(dict(split_info or {})))
+    current.setdefault("splits", {})[split] = info | {"n": n, "git_commit": git_commit()}
     path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n")

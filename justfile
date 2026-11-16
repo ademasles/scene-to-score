@@ -38,3 +38,7 @@ download *ARGS:
 # A2: MusicLDM from CLAP audio vectors; writes wav files and summary.json under outputs/
 musicldm-smoke *ARGS:
     uv run python scripts/musicldm_smoke.py {{ARGS}}
+
+# A3: cache video tokens, e.g. `just extract-video encoder=vjepa2-large max_segments=100`
+extract-video *ARGS:
+    uv run python -m scene_to_score.features.video {{ARGS}}
