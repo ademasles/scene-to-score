@@ -29,6 +29,7 @@ import torch
 import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch import nn
+from tqdm import tqdm
 from transformers import VJEPA2Model
 
 from scene_to_score.data.ossl import Clip, Segment, segment_clip, subset
@@ -121,7 +122,10 @@ def preprocess(frames: torch.Tensor, resize: int, crop: int) -> torch.Tensor:
 
 
 class VideoEncoder:
-    """Turns a batch of frame stacks (B x T x H x W x 3, uint8) into tokens (B x T' x d)."""
+    """Turns B frame stacks (each T x H x W x 3, uint8) into tokens (B x T' x d).
+
+    Each stack is resized on its own, so clips of different resolutions can share a batch.
+    """
 
     def __init__(self, model: nn.Module, spec: EncoderSpec, device: torch.device) -> None:
         self.model = model.eval().to(device)
@@ -131,9 +135,13 @@ class VideoEncoder:
         self.tubelet_size = int(getattr(getattr(model, "config", None), "tubelet_size", 1))
 
     @torch.inference_mode()
-    def __call__(self, frames: np.ndarray) -> torch.Tensor:
-        x = torch.from_numpy(frames).to(self.device)
-        x = preprocess(x, self.spec.resize, self.spec.crop).to(self.dtype)
+    def __call__(self, frames: Sequence[np.ndarray] | np.ndarray) -> torch.Tensor:
+        x = torch.stack(
+            [
+                preprocess(torch.from_numpy(f).to(self.device), self.spec.resize, self.spec.crop)
+                for f in frames
+            ]
+        ).to(self.dtype)
         b, t = x.shape[:2]
         if self.spec.kind == "dinov2":
             out = self.model(pixel_values=x.flatten(0, 1))
@@ -173,7 +181,7 @@ def extract(
 
     def flush() -> None:
         if batch:
-            tokens.append(encoder(np.stack(batch)).cpu().numpy())
+            tokens.append(encoder(batch).cpu().numpy())
             batch.clear()
 
     for clip_id, group in groupby(segments, key=lambda s: s.clip.clip_id):
@@ -216,7 +224,10 @@ def main(cfg: DictConfig) -> None:
         cfg.data.subset_seed,
         splits=cfg.splits,
     )
-    device = pick_device()
+    device = pick_device(cfg.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available; pass device=cpu to extract on the CPU anyway")
+    log.info("encoding with %s on %s", cfg.encoder, device)
     encoder = load_encoder(cfg.encoder, device, half=cfg.half)
     name = f"{cfg.encoder}-gray" if cfg.gray else cfg.encoder
     out_dir = Path(cfg.paths.features_dir) / "video" / name
@@ -240,7 +251,7 @@ def main(cfg: DictConfig) -> None:
         features, seconds = extract(
             encoder,
             root,
-            segments,
+            tqdm(segments, desc=f"{name} {split}", unit="seg"),
             n_frames=cfg.n_frames,
             batch_size=cfg.batch_size,
             gray=cfg.gray,

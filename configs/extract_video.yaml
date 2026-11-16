@@ -1,5 +1,5 @@
 # A3: frozen video encoders. Timing run on ~100 segments:
-#   just extract-video encoder=vjepa2-large max_segments=100 splits=[test]
+#   just extract-video encoder=vjepa2-large max_segments=100 'splits=[test]'
 defaults:
   - paths: default
   - data: ossl_v2
@@ -12,6 +12,7 @@ batch_size: 8
 max_segments: null      # cap per split, for timing runs; recorded as partial in meta.json
 gray: false             # colour ablation: writes to video/<encoder>-gray
 half: true
+device: cuda            # fails fast without a GPU; device=cpu to force the CPU
 
 hydra:
   run:
