@@ -20,14 +20,15 @@ from scene_to_score.features.video import (
 FPS = 10
 
 
-def _write_video(path: Path, seconds: float) -> None:
+def _write_video(path: Path, seconds: float, size: tuple[int, int] = (64, 48)) -> None:
     """Frame i is a flat grey image of level 10 i (mod 260), so frames can be identified."""
+    width, height = size
     with av.open(str(path), "w") as container:
         stream = container.add_stream("mpeg4", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 64, 48, "yuv420p"
+        stream.width, stream.height, stream.pix_fmt = width, height, "yuv420p"
         stream.options = {"qscale": "1"}
         for i in range(round(seconds * FPS)):
-            image = np.full((48, 64, 3), (i * 10) % 260, dtype=np.uint8)
+            image = np.full((height, width, 3), (i * 10) % 260, dtype=np.uint8)
             frame = av.VideoFrame.from_ndarray(image, format="rgb24")
             container.mux(stream.encode(frame))
         container.mux(stream.encode(None))
@@ -126,6 +127,17 @@ def test_extract_writes_the_cache_format(tmp_path: Path) -> None:
     assert read_features(tmp_path / "cache", "train").ids == features.ids
 
 
+def test_extract_batches_clips_of_different_resolutions(tmp_path: Path) -> None:
+    segments = []
+    for clip_id, size in [("5_0_0_1000", (64, 48)), ("6_0_0_1000", (80, 32))]:
+        clip = parse_clip_id(clip_id, "train")
+        clip.video_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_video(clip.video_path(tmp_path), 10.0, size)
+        segments += segment_clip(clip, 10.0, 10.0)
+    features, _ = extract(_dinov2(), tmp_path, segments, n_frames=4, batch_size=2)
+    assert features.tokens is not None and features.tokens.shape == (2, 4, 32)
+
+
 def test_extract_video_config_composes() -> None:
     from hydra import compose, initialize_config_dir
 
@@ -136,3 +148,4 @@ def test_extract_video_config_composes() -> None:
         cfg = compose(config_name="extract_video", overrides=["encoder=vjepa2-large"])
     assert cfg.encoder in ENCODERS
     assert cfg.n_frames % 2 == 0  # V-JEPA 2 tubelets of 2 frames
+    assert cfg.device == "cuda"  # never fall back to the CPU silently
