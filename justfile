@@ -42,3 +42,7 @@ musicldm-smoke *ARGS:
 # A3: cache video tokens, e.g. `just extract-video encoder=vjepa2-large max_segments=100`
 extract-video *ARGS:
     uv run python -m scene_to_score.features.video {{ARGS}}
+
+# A4: train on cached features, e.g. `just train objective=cosine method=video_only-dinov2-cos`
+train *ARGS:
+    uv run python -m scene_to_score.train {{ARGS}}
