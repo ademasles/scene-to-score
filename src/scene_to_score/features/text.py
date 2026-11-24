@@ -13,7 +13,8 @@ Per variant, ``${paths.features_dir}/text/clap-<variant>/`` holds (format 1.3, o
 - ``movies_tokens.npy``: hidden states of the text tower, float16 (N, L, H), before projection,
   only for the variants in ``token_variants`` (they are large and only cross-attention reads them);
 - ``movies_mask.npy``: bool (N, L), True for a real token, next to the tokens;
-- ``texts.jsonl``: the exact text encoded, with its token count and whether it was truncated;
+- ``texts.jsonl``: the exact text encoded, its token count, whether it was truncated and
+  where the synopsis came from (``imdb``, ``youtube`` or none);
 - ``meta.json``: written last, so its presence means the folder is complete.
 """
 
@@ -21,6 +22,7 @@ import ast
 import csv
 import json
 import logging
+import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -67,6 +69,7 @@ class Film:
     genres: str | None
     year: str | None
     synopsis: str | None
+    synopsis_source: str | None = None  # "imdb", "youtube" or None
 
 
 def _text(value: object) -> str | None:
@@ -102,10 +105,26 @@ def _year(value: object) -> str | None:
         return cleaned
 
 
+_ORIGINAL_TITLE = re.compile(r"\boriginal title\b", re.IGNORECASE)
+
+
+def _youtube_synopsis(value: object) -> str | None:
+    """A YouTube description used as synopsis: cut before "Original title" (it would leak the
+    title) and without the trailing ellipsis of the truncated text."""
+    cleaned = _text(value)
+    if cleaned is None:
+        return None
+    cleaned = _ORIGINAL_TITLE.split(cleaned, maxsplit=1)[0]
+    cleaned = cleaned.rstrip().removesuffix("...").removesuffix("\u2026").rstrip(" .:;,-")
+    return _text(cleaned)
+
+
 def read_films(path: Path, columns: Mapping[str, str]) -> list[Film]:
     """One :class:`Film` per row of ``metadata.csv``, sorted by ``movie_id``.
 
-    ``columns`` maps ``movie_id``, ``genres``, ``year`` and ``synopsis`` to the CSV headers.
+    ``columns`` maps ``movie_id``, ``genres``, ``year`` and ``synopsis`` to the CSV headers, and
+    optionally ``synopsis_fallback`` to a column read when the synopsis is missing (about half of
+    OSSL-v2's films have no IMDb description, but a YouTube one).
     """
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -119,12 +138,16 @@ def read_films(path: Path, columns: Mapping[str, str]) -> list[Film]:
         movie_id = _text(row[columns["movie_id"]])
         if movie_id is None:
             raise ValueError(f"{path}: a row has no {columns['movie_id']!r}")
+        synopsis, source = _text(row[columns["synopsis"]]), "imdb"
+        if synopsis is None and "synopsis_fallback" in columns:
+            synopsis, source = _youtube_synopsis(row[columns["synopsis_fallback"]]), "youtube"
         films.append(
             Film(
                 movie_id=movie_id,
                 genres=_genres(row[columns["genres"]]),
                 year=_year(row[columns["year"]]),
-                synopsis=_text(row[columns["synopsis"]]),
+                synopsis=synopsis,
+                synopsis_source=source if synopsis is not None else None,
             )
         )
     ids = [film.movie_id for film in films]
@@ -317,9 +340,16 @@ def extract_variant(
     seconds = time.perf_counter() - start
     counts = stats.pop("token_counts")
     truncated = stats.pop("truncated")
+    sources = {film.movie_id: film.synopsis_source for film in films}
     with (out_dir / "texts.jsonl").open("w", encoding="utf-8") as handle:
         for movie_id, text, count, cut in zip(ids, texts, counts, truncated, strict=True):
-            record = {"movie_id": movie_id, "text": text, "n_tokens": count, "truncated": cut}
+            record = {
+                "movie_id": movie_id,
+                "text": text,
+                "n_tokens": count,
+                "truncated": cut,
+                "synopsis_source": sources[movie_id],
+            }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     config = getattr(model, "config", None)
     meta = {
@@ -339,6 +369,10 @@ def extract_variant(
             for field in ("genres", "year", "synopsis")
         },
         "n_empty_texts": sum(not text for text in texts),
+        "synopsis_sources": {
+            name: sum(film.synopsis_source == name for film in films)
+            for name in ("imdb", "youtube")
+        },
         "hidden_states_access": _HIDDEN_STATES_ACCESS,
         "dtype": {"pooled": "float16", "tokens": "float16", "mask": "bool"},
         **stats,

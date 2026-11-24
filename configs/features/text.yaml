@@ -18,6 +18,8 @@ columns:
   genres: genres
   year: year
   synopsis: imdb_description
+  # Read when imdb_description is empty (876 of 1,812 films): cut before "Original title".
+  synopsis_fallback: youtube_description
 
 # Folders written: ${paths.features_dir}/text/clap-<variant>/
 variants: [full, noyear, genres, synopsis]

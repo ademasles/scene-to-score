@@ -175,7 +175,7 @@ def test_read_films_cleans_and_sorts(tmp_path: Path) -> None:
     assert [film.movie_id for film in films] == ["2", "3", "10"]
     assert films[0] == Film("2", "Comedy", None, None)
     assert films[1].genres is None
-    assert films[2] == Film("10", "Drama, War", "1944", "Two lines.")
+    assert films[2] == Film("10", "Drama, War", "1944", "Two lines.", "imdb")
 
 
 def test_read_films_missing_column(tmp_path: Path) -> None:
@@ -342,3 +342,47 @@ def test_text_config_composes() -> None:
     assert cfg.split_name == "movies"
     assert cfg.paths.features_dir
     assert set(cfg.token_variants) <= set(VARIANTS)
+
+
+def test_youtube_description_fills_a_missing_synopsis(tmp_path: Path) -> None:
+    path = tmp_path / "metadata.csv"
+    header = ["movie_id", "genres", "year", "imdb_description", "youtube_description"]
+    rows = [
+        {
+            "movie_id": "1",
+            "genres": "Drama",
+            "year": "1950",
+            "imdb_description": "From IMDb.",
+            "youtube_description": "Ignored.",
+        },
+        {
+            "movie_id": "2",
+            "genres": "Noir",
+            "year": "1949",
+            "imdb_description": "",
+            "youtube_description": "Frank is poisoned. Original title:\xa0D.O.A. ...",
+        },
+        {
+            "movie_id": "3",
+            "genres": "Noir",
+            "year": "1945",
+            "imdb_description": "",
+            "youtube_description": "A wife plots to kill her husband, but the\xa0...",
+        },
+        {
+            "movie_id": "4",
+            "genres": "Noir",
+            "year": "1945",
+            "imdb_description": "",
+            "youtube_description": "",
+        },
+    ]
+    _write_csv(path, rows, header=header)
+    films = read_films(path, {**COLUMNS, "synopsis_fallback": "youtube_description"})
+    assert [(f.synopsis, f.synopsis_source) for f in films] == [
+        ("From IMDb.", "imdb"),
+        ("Frank is poisoned", "youtube"),
+        ("A wife plots to kill her husband, but the", "youtube"),
+        (None, None),
+    ]
+    assert all("D.O.A" not in (f.synopsis or "") for f in films)
