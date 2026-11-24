@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
+from transformers import ClapConfig, ClapModel, RobertaTokenizer
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from scene_to_score.features.text import (
@@ -237,17 +238,16 @@ def test_extract_variant_writes_the_cache(model: ToyClap, tmp_path: Path) -> Non
         films,
         "full",
         tmp_path,
-        split="all",
         max_length=12,
         batch_size=2,
         model_id="toy",
     )
     assert out_dir == text_dir(tmp_path, "full") == tmp_path / "text" / "clap-full"
 
-    assert (out_dir / "all_ids.txt").read_text().split() == ["3", "5", "9"]
-    pooled = np.load(out_dir / "all_pooled.npy", mmap_mode="r")
-    tokens = np.load(out_dir / "all_tokens.npy", mmap_mode="r")
-    mask = np.load(out_dir / "all_mask.npy", mmap_mode="r")
+    assert (out_dir / "movies_ids.txt").read_text().split() == ["3", "5", "9"]
+    pooled = np.load(out_dir / "movies_pooled.npy", mmap_mode="r")
+    tokens = np.load(out_dir / "movies_tokens.npy", mmap_mode="r")
+    mask = np.load(out_dir / "movies_mask.npy", mmap_mode="r")
     assert (pooled.dtype, pooled.shape) == (np.float16, (3, PROJ))
     assert (tokens.dtype, tokens.shape) == (np.float16, (3, 12, HIDDEN))
     assert (mask.dtype, mask.shape) == (np.bool_, (3, 12))
@@ -278,8 +278,8 @@ def test_variants_go_to_their_own_folder(model: ToyClap, tmp_path: Path) -> None
         extract_variant(model, ToyTokenizer(), [FILM], variant, tmp_path, model_id="toy")
     names = sorted(path.name for path in (tmp_path / "text").iterdir())
     assert names == ["clap-full", "clap-genres", "clap-noyear", "clap-synopsis"]
-    short = np.load(tmp_path / "text" / "clap-genres" / "all_tokens.npy")
-    long = np.load(tmp_path / "text" / "clap-full" / "all_tokens.npy")
+    short = np.load(tmp_path / "text" / "clap-genres" / "movies_tokens.npy")
+    long = np.load(tmp_path / "text" / "clap-full" / "movies_tokens.npy")
     assert short.shape[1] < long.shape[1]
 
 
@@ -287,6 +287,58 @@ def test_rerun_is_reproducible(model: ToyClap, tmp_path: Path) -> None:
     films = [FILM, Film("8", "Comedy", "1920", "Another story")]
     for name in ("a", "b"):
         extract_variant(model, ToyTokenizer(), films, "full", tmp_path / name, model_id="toy")
-    first = np.load(tmp_path / "a" / "text" / "clap-full" / "all_pooled.npy")
-    second = np.load(tmp_path / "b" / "text" / "clap-full" / "all_pooled.npy")
+    first = np.load(tmp_path / "a" / "text" / "clap-full" / "movies_pooled.npy")
+    second = np.load(tmp_path / "b" / "text" / "clap-full" / "movies_pooled.npy")
     np.testing.assert_array_equal(first, second)
+
+
+def test_variant_without_tokens_writes_the_vector_only(model: ToyClap, tmp_path: Path) -> None:
+    out_dir = extract_variant(
+        model, ToyTokenizer(), [FILM], "genres", tmp_path, model_id="toy", keep_tokens=False
+    )
+    assert sorted(p.name for p in out_dir.glob("movies_*")) == [
+        "movies_ids.txt",
+        "movies_pooled.npy",
+    ]
+    assert json.loads((out_dir / "meta.json").read_text())["has_tokens"] is False
+
+
+def test_encode_batch_with_a_real_clap_model(tmp_path: Path) -> None:
+    """Locks the transformers 5 outputs of ``get_text_features`` and ``text_model``."""
+    torch.manual_seed(0)
+    config = ClapConfig(
+        text_config={
+            "vocab_size": 99,
+            "hidden_size": 32,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "intermediate_size": 37,
+            "max_position_embeddings": 64,
+            "projection_dim": 16,
+        },
+        audio_config={"depths": [1, 1], "num_attention_heads": [2, 2], "hidden_size": 32},
+        projection_dim=16,
+    )
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "a": 4}
+    (tmp_path / "vocab.json").write_text(json.dumps(vocab))
+    (tmp_path / "merges.txt").write_text("#version: 0.2\n")
+    tokenizer = RobertaTokenizer(
+        vocab_file=str(tmp_path / "vocab.json"), merges_file=str(tmp_path / "merges.txt")
+    )
+    texts = ["a", "a a a"]
+    pooled, hidden, mask = encode_batch(ClapModel(config).eval(), tokenizer, texts, 16)
+    assert pooled.shape == (2, 16)
+    assert hidden.shape[0] == 2 and hidden.shape[2] == 32 and mask.shape == hidden.shape[:2]
+    assert mask.sum(1).tolist() == token_lengths(tokenizer, texts).tolist()
+    torch.testing.assert_close(pooled.norm(dim=-1), torch.ones(2))
+
+
+def test_text_config_composes() -> None:
+    from hydra import compose, initialize_config_dir
+
+    config_dir = Path(__file__).resolve().parents[1] / "configs"
+    with initialize_config_dir(version_base=None, config_dir=str(config_dir)):
+        cfg = compose(config_name="features/text")
+    assert cfg.split_name == "movies"
+    assert cfg.paths.features_dir
+    assert set(cfg.token_variants) <= set(VARIANTS)

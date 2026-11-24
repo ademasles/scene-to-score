@@ -8,10 +8,11 @@ in one space.
 
 Per variant, ``${paths.features_dir}/text/clap-<variant>/`` holds (format 1.3, one row per film):
 
-- ``<split>_ids.txt``: one ``movie_id`` per line, ``<split>`` being ``all``;
-- ``<split>_pooled.npy``: the final CLAP vector, float16 (N, 512), L2-normalised;
-- ``<split>_tokens.npy``: hidden states of the text tower, float16 (N, L, H), before projection;
-- ``<split>_mask.npy``: bool (N, L), True for a real token;
+- ``movies_ids.txt``: one ``movie_id`` per line (text is per film, so the split is ``movies``);
+- ``movies_pooled.npy``: the final CLAP vector, float16 (N, 512), L2-normalised;
+- ``movies_tokens.npy``: hidden states of the text tower, float16 (N, L, H), before projection,
+  only for the variants in ``token_variants`` (they are large and only cross-attention reads them);
+- ``movies_mask.npy``: bool (N, L), True for a real token, next to the tokens;
 - ``texts.jsonl``: the exact text encoded, with its token count and whether it was truncated;
 - ``meta.json``: written last, so its presence means the folder is complete.
 """
@@ -20,7 +21,6 @@ import ast
 import csv
 import json
 import logging
-import subprocess
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -36,8 +36,8 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, ClapModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
-from scene_to_score.features.cache import check_unit_norm
-from scene_to_score.generation import MODEL_ID, _projected
+from scene_to_score.features.cache import check_unit_norm, git_commit
+from scene_to_score.generation import MODEL_ID, projected
 from scene_to_score.seed import pick_device, seed_everything
 
 log = logging.getLogger(__name__)
@@ -198,7 +198,7 @@ def encode_batch(
     )
     input_ids = batch["input_ids"].to(device)
     attention_mask = batch["attention_mask"].to(device)
-    pooled = _projected(
+    pooled = projected(
         _apply(model, "get_text_features", input_ids=input_ids, attention_mask=attention_mask)
     )
     tower = _apply(model, "text_model", input_ids=input_ids, attention_mask=attention_mask)
@@ -217,8 +217,10 @@ def write_cache(
     split: str,
     max_length: int,
     batch_size: int,
+    keep_tokens: bool = True,
 ) -> dict[str, Any]:
-    """Encode ``texts`` and write ids, pooled, tokens and mask (format 1.3) into ``out_dir``.
+    """Encode ``texts`` and write ids, pooled and, with ``keep_tokens``, tokens and mask
+    (format 1.3) into ``out_dir``.
 
     Tokens go straight to a memory-mapped file, so the full (N, L, H) array is never in memory.
     Returns the statistics for ``meta.json``.
@@ -232,39 +234,44 @@ def write_cache(
     mask_all = np.zeros((n, length), dtype=bool)
     pooled_all: np.ndarray | None = None
     tokens: np.ndarray | None = None
+    hidden_size = 0
     for start in tqdm(range(0, n, batch_size), desc=out_dir.name, unit="batch"):
         stop = min(start + batch_size, n)
         pooled, hidden, mask = encode_batch(model, tokenizer, texts[start:stop], max_length)
-        if pooled_all is None or tokens is None:
+        if pooled_all is None:
             pooled_all = np.zeros((n, pooled.shape[1]), dtype=np.float32)
-            tokens = np.lib.format.open_memmap(
-                out_dir / f"{split}_tokens.npy",
-                mode="w+",
-                dtype=np.float16,
-                shape=(n, length, hidden.shape[2]),
-            )
+            hidden_size = int(hidden.shape[2])
+            if keep_tokens:
+                tokens = np.lib.format.open_memmap(
+                    out_dir / f"{split}_tokens.npy",
+                    mode="w+",
+                    dtype=np.float16,
+                    shape=(n, length, hidden_size),
+                )
         width = hidden.shape[1]
-        block = hidden.numpy().astype(np.float16)
-        if not np.isfinite(block).all():
-            raise ValueError(f"hidden states overflow float16 in texts {start}:{stop}")
         pooled_all[start:stop] = pooled.numpy()
-        tokens[start:stop, :width] = block  # the rest stays zero: padding
         mask_all[start:stop, :width] = mask.numpy()
-    assert pooled_all is not None and tokens is not None
+        if tokens is not None:
+            block = hidden.numpy().astype(np.float16)
+            if not np.isfinite(block).all():
+                raise ValueError(f"hidden states overflow float16 in texts {start}:{stop}")
+            tokens[start:stop, :width] = block  # the rest stays zero: padding
+    assert pooled_all is not None
     if not (mask_all.sum(axis=1) == np.minimum(full, max_length)).all():
         raise ValueError("mask lengths disagree with the tokenizer: wrong padding or truncation")
     check_unit_norm(pooled_all, "pooled")
-    tokens.flush()
-    hidden_size = int(tokens.shape[2])
-    del tokens
+    if tokens is not None:
+        tokens.flush()
+        del tokens
+        np.save(out_dir / f"{split}_mask.npy", mask_all)
     np.save(out_dir / f"{split}_pooled.npy", pooled_all.astype(np.float16))
-    np.save(out_dir / f"{split}_mask.npy", mask_all)
     (out_dir / f"{split}_ids.txt").write_text("".join(f"{item}\n" for item in ids))
     truncated = full > max_length
     return {
         "n_films": n,
         "pooled_dim": int(pooled_all.shape[1]),
         "hidden_size": hidden_size,
+        "has_tokens": keep_tokens,
         "L": length,
         "max_length": max_length,
         "padding_side": str(getattr(tokenizer, "padding_side", "unknown")),
@@ -277,20 +284,6 @@ def write_cache(
     }
 
 
-def _git_commit() -> str:
-    try:
-        done = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=Path(__file__).parent,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-    return done.stdout.strip()
-
-
 def extract_variant(
     model: torch.nn.Module,
     tokenizer: Any,
@@ -298,11 +291,12 @@ def extract_variant(
     variant: str,
     features_dir: Path,
     *,
-    split: str = "all",
+    split: str = "movies",
     max_length: int = 512,
     batch_size: int = 32,
     model_id: str = MODEL_ID,
     complete: bool = True,
+    keep_tokens: bool = True,
 ) -> Path:
     """Encode one variant of every film into ``features_dir/text/clap-<variant>/``."""
     texts = [build_text(film, variant) for film in films]
@@ -318,6 +312,7 @@ def extract_variant(
         split=split,
         max_length=max_length,
         batch_size=batch_size,
+        keep_tokens=keep_tokens,
     )
     seconds = time.perf_counter() - start
     counts = stats.pop("token_counts")
@@ -354,7 +349,7 @@ def extract_variant(
             "torch": torch.__version__,
             "numpy": np.__version__,
         },
-        "git_commit": _git_commit(),
+        "git_commit": git_commit(),
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
     log.info(
@@ -396,6 +391,7 @@ def main(cfg: DictConfig) -> None:
             batch_size=cfg.batch_size,
             model_id=cfg.model_id,
             complete=cfg.max_films is None,
+            keep_tokens=variant in cfg.token_variants,
         )
         log.info("wrote %s", out_dir)
 

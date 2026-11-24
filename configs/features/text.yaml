@@ -2,11 +2,6 @@
 # B1: CLAP text features of the films (one vector and one token sequence per film).
 # Run with `just extract-text`; overrides go after the recipe name, e.g.
 #   just extract-text 'variants=[full]' max_films=50
-#
-# TODO(check before merging): the `paths` block must give the same directories as the project's
-# shared paths config (the one the download and musicldm-smoke configs use). If that config is a
-# group, replace the block with the matching `defaults:` entry and delete it here.
-# @package _global_
 defaults:
   - /paths: default
   - _self_
@@ -26,9 +21,11 @@ columns:
 
 # Folders written: ${paths.features_dir}/text/clap-<variant>/
 variants: [full, noyear, genres, synopsis]
-# Text features are per film, not per split, so there is a single "all" set (1,812 films).
+# Text features are per film, not per split: one "movies" set (contract 1.3, cache.py).
 # The training code picks the films of a split from the segment's movie_id.
-split_name: all
+split_name: movies
+# Hidden states are large (N x L x 768 float16) and only cross-attention reads them.
+token_variants: [full]
 
 batch_size: 32
 # null = tokenizer.model_max_length (512 for MusicLDM's CLAP tokenizer; checked at run time).
