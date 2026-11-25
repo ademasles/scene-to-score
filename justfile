@@ -35,6 +35,10 @@ kernel:
 download *ARGS:
     uv run python -m scene_to_score.data.download {{ARGS}}
 
+# Create the fixed validation-film list and print the C1 dataset audit.
+make-split *ARGS:
+    uv run python -m scene_to_score.data.split {{ARGS}}
+
 # A2: MusicLDM from CLAP audio vectors; writes wav files and summary.json under outputs/
 musicldm-smoke *ARGS:
     uv run python scripts/musicldm_smoke.py {{ARGS}}

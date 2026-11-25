@@ -21,6 +21,7 @@ just sync        # create .venv from uv.lock
 just gpu         # check that PyTorch sees the GPU
 just check       # ruff + basedpyright + pytest
 just download    # OSSL-v2 index, 20 training films and 5 test films (about 3.4 GB)
+just make-split  # download the index only; create the validation-film list and print its audit
 uv run pre-commit install   # once after cloning
 ```
 
@@ -60,6 +61,7 @@ directly, for example `uv run pytest`.
 | `src/scene_to_score/data/` | OSSL-v2 index (`ossl.py`) and download (`download.py`) |
 | `src/scene_to_score/seed.py` | Seeding and device selection |
 | `configs/` | Hydra configuration: paths, data |
+| `splits/val_movies.txt` | Committed, seeded 10% validation split by training film |
 | `scripts/` | One-off scripts (`gpu_check.py`) |
 | `notebooks/` | Exploration; `just kernel` registers the environment with Jupyter |
 | `tests/` | pytest |
