@@ -58,6 +58,7 @@ def write_validation_movies(movie_ids: Sequence[int], path: Path = VALIDATION_MO
 
 def _read_metadata(path: Path) -> dict[int, dict[str, str]]:
     required = {"movie_id", "split", "year", "genres", "imdb_description"}
+    optional = {"youtube_description"}
     with path.open(newline="") as file:
         reader = csv.DictReader(file)
         if reader.fieldnames is None or not required.issubset(reader.fieldnames):
@@ -67,7 +68,7 @@ def _read_metadata(path: Path) -> dict[int, dict[str, str]]:
             movie_id = int(row["movie_id"])
             if movie_id in rows:
                 raise ValueError(f"duplicate movie_id in {path}: {movie_id}")
-            rows[movie_id] = {key: row.get(key) or "" for key in required}
+            rows[movie_id] = {key: row.get(key) or "" for key in required | optional}
     return rows
 
 
@@ -97,6 +98,10 @@ def audit_report(
     _validate_metadata_splits(splits, metadata)
 
     missing_description = sum(not row["imdb_description"].strip() for row in metadata.values())
+    no_synopsis = sum(
+        not (row["imdb_description"].strip() or row.get("youtube_description", "").strip())
+        for row in metadata.values()
+    )
     missing_genres = sum(not row["genres"].strip() for row in metadata.values())
     movie_count = len(metadata)
     if not movie_count:
@@ -127,7 +132,8 @@ def audit_report(
         "### OSSL-v2 split audit",
         "",
         f"- Films without `imdb_description`: {missing_description}/{movie_count} "
-        f"({missing_description / movie_count:.1%}).",
+        f"({missing_description / movie_count:.1%}); "
+        f"without any synopsis once `youtube_description` fills the gaps: {no_synopsis}.",
         f"- Films without `genres`: {missing_genres}/{movie_count} "
         f"({missing_genres / movie_count:.1%}).",
         f"- Release-year range: {year_range}; missing/unparseable year: {missing_years}.",
@@ -159,15 +165,10 @@ def main(cfg: DictConfig) -> None:
     )
     splits, validation_movies = create_splits(root)
     metadata = _read_metadata(root / "metadata.csv")
+    # The audit checks the splits against metadata.csv, so run it before writing anything.
+    report = audit_report(splits, metadata, segment_s=cfg.data.segment_s, hop_s=cfg.data.hop_s)
     write_validation_movies(validation_movies)
-    print(
-        audit_report(
-            splits,
-            metadata,
-            segment_s=cfg.data.segment_s,
-            hop_s=cfg.data.hop_s,
-        )
-    )
+    print(report)
     log.info("wrote %d validation movie IDs to %s", len(validation_movies), VALIDATION_MOVIES_PATH)
 
 

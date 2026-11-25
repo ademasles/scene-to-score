@@ -58,6 +58,7 @@ def test_audit_reports_movie_clip_and_segment_counts() -> None:
             "year": {1: "1977", 2: "1980", 3: "2000"}[movie_id],
             "genres": "Drama" if movie_id != 1 else "",
             "imdb_description": "" if movie_id == 2 else "Description",
+            "youtube_description": "",
         }
         for movie_id in (1, 2, 3)
     }
@@ -69,6 +70,29 @@ def test_audit_reports_movie_clip_and_segment_counts() -> None:
     assert "| test | 1 | 1 | 1 |" in report
     assert "1977 is in range" in report
     assert "1/3 (33.3%)" in report
+    assert "without any synopsis once `youtube_description` fills the gaps: 1." in report
+
+
+def test_audit_counts_youtube_fallback_as_a_synopsis() -> None:
+    clips = {
+        "train": [parse_clip_id("1_0_0_2000", "train")],
+        "val": [],
+        "test": [],
+    }
+    metadata = {
+        1: {
+            "split": "train",
+            "year": "1977",
+            "genres": "Drama",
+            "imdb_description": "",
+            "youtube_description": "A synopsis.",
+        }
+    }
+
+    report = audit_report(clips, metadata, segment_s=10.0, hop_s=10.0)
+
+    assert "1/1 (100.0%)" in report
+    assert "fills the gaps: 0." in report
 
 
 def test_create_splits_rejects_invalid_fraction(tmp_path: Path) -> None:
