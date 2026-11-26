@@ -51,3 +51,8 @@ extract-video *ARGS:
 # `just extract-text 'variants=[full]' max_films=50`
 extract-text *ARGS:
     uv run python -m scene_to_score.features.text {{ARGS}}
+
+# C2: CLAP audio vectors of the music (the targets), same subset as the video, e.g.
+# `just extract-music data.n_train_movies=400 data.n_test_movies=100`
+extract-music *ARGS:
+    uv run python -m scene_to_score.features.music {{ARGS}}
