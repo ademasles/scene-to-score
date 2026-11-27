@@ -1,0 +1,21 @@
+# @package _global_
+# C2: CLAP audio vectors of the music, the regression targets. Run with `just extract-music`
+# and the same subset as the video, e.g.
+#   just extract-music data.n_train_movies=400 data.n_test_movies=100
+defaults:
+  - /paths: default
+  - /data: ossl_v2
+  - _self_
+
+# Same checkpoint as the text features (B1) and the generator (A2): subfolders text_encoder
+# (a full ClapModel) and feature_extractor.
+model_id: ucsd-reach/musicldm
+splits: [train, test]
+batch_size: 32
+max_segments: null   # cap per split, for timing runs; recorded as partial in meta.json
+device: auto
+seed: 0
+
+hydra:
+  run:
+    dir: outputs/extract_music/${now:%Y-%m-%d}/${now:%H-%M-%S}
