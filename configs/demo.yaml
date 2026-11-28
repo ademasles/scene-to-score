@@ -1,0 +1,22 @@
+# Demo: score an unseen video with a trained predictor, e.g.
+#   just demo input=star_wars.mp4 checkpoint=outputs/ckpt/video_only-vjepa2/seed0.pt
+defaults:
+  - paths: default
+  - data: ossl_v2
+  - _self_
+
+input: ???          # any mp4 (H.264); its own sound track is replaced
+checkpoint: ???     # outputs/ckpt/<method>/seed<k>.pt written by `just train`
+n_frames: 16        # as in extract_video.yaml
+model_id: ucsd-reach/musicldm
+steps: 200
+guidance: 2.0
+crossfade_s: 0.5
+retrieve_k: 3       # also cut the closest real training music (0 to skip)
+half: true
+device: auto
+seed: 0
+
+hydra:
+  run:
+    dir: outputs/demo/${now:%Y-%m-%d}/${now:%H-%M-%S}

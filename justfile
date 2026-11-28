@@ -55,3 +55,8 @@ extract-text *ARGS:
 # A4: train on cached features, e.g. `just train objective=cosine method=video_only-dinov2-cos`
 train *ARGS:
     uv run python -m scene_to_score.train {{ARGS}}
+
+# Demo: an unseen mp4 in, the same video with generated music out, e.g.
+# `just demo input=clip.mp4 checkpoint=outputs/ckpt/video_only-vjepa2/seed0.pt`
+demo *ARGS:
+    uv run python -m scene_to_score.demo {{ARGS}}

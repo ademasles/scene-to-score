@@ -14,7 +14,7 @@ from pathlib import Path
 import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
 from scene_to_score.features.cache import read_features, read_targets
@@ -226,7 +226,8 @@ def run(cfg: DictConfig) -> dict[str, float]:
     out = Path(cfg.outputs_dir)
     ckpt = out / "ckpt" / cfg.method / f"seed{cfg.seed}.pt"
     ckpt.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": model.state_dict(), "val_r10": best}, ckpt)
+    config = OmegaConf.to_container(cfg, resolve=True)
+    torch.save({"state_dict": model.state_dict(), "val_r10": best, "config": config}, ckpt)
     for name, split in (("val", val), ("test", test)):
         z_hat = predict(model, split, device, cfg.batch_size).numpy().astype(np.float32)
         path = prediction_path(out / "preds", cfg.method, cfg.seed, name, cfg.condition)
