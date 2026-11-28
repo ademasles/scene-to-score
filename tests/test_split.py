@@ -2,8 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from scene_to_score.data.ossl import parse_clip_id
-from scene_to_score.data.split import audit_report, create_splits, write_validation_movies
+from scene_to_score.data.ossl import parse_clip_id, select_movies
+from scene_to_score.data.split import (
+    VALIDATION_SEED,
+    audit_report,
+    create_splits,
+    write_validation_movies,
+)
 
 
 def _write_official_splits(root: Path, train: list[str], test: list[str]) -> None:
@@ -98,3 +103,18 @@ def test_audit_counts_youtube_fallback_as_a_synopsis() -> None:
 def test_create_splits_rejects_invalid_fraction(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
         create_splits(tmp_path, validation_fraction=1.0)
+
+
+def test_validation_draw_is_independent_of_the_movie_subset(tmp_path: Path) -> None:
+    # OSSL-v2 sizes: 1,489 training movies, a 400-movie subset drawn with subset_seed 0.
+    _write_official_splits(
+        tmp_path, [f"{movie_id}_0_0_2000" for movie_id in range(1489)], ["9999_0_0_2000"]
+    )
+    _, validation_movies = create_splits(tmp_path, seed=VALIDATION_SEED)
+    clips = [parse_clip_id(f"{m}_0_0_2000", "train") for m in range(1489)]
+    subset = {c.movie_id for c in select_movies(clips, 400, 0)}
+
+    overlap = len(subset & set(validation_movies))
+
+    # about 10 % of the subset, as for an independent draw (166 * 400 / 1489 = 45)
+    assert 25 <= overlap <= 65
