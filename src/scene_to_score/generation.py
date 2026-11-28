@@ -45,7 +45,7 @@ def audio_embedding(
         input_features=inputs["input_features"].to(model.device, model.dtype),
         is_longer=inputs["is_longer"].to(model.device),
     )
-    return _projected(out)
+    return projected(out)
 
 
 @torch.inference_mode()
@@ -56,10 +56,10 @@ def empty_text_embedding(model: ClapModel, tokenizer: PreTrainedTokenizerBase) -
         input_ids=tokens["input_ids"].to(model.device),
         attention_mask=tokens["attention_mask"].to(model.device),
     )
-    return _projected(out)
+    return projected(out)
 
 
-def _projected(out: object) -> torch.Tensor:
+def projected(out: object) -> torch.Tensor:
     """transformers 5 puts the normalised projection in ``pooler_output``."""
     if not isinstance(out, BaseModelOutputWithPooling) or out.pooler_output is None:
         raise TypeError(f"expected BaseModelOutputWithPooling, got {type(out).__name__}")

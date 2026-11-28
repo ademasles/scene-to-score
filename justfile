@@ -35,6 +35,10 @@ kernel:
 download *ARGS:
     uv run python -m scene_to_score.data.download {{ARGS}}
 
+# Create the fixed validation-film list and print the C1 dataset audit.
+make-split *ARGS:
+    uv run python -m scene_to_score.data.split {{ARGS}}
+
 # A2: MusicLDM from CLAP audio vectors; writes wav files and summary.json under outputs/
 musicldm-smoke *ARGS:
     uv run python scripts/musicldm_smoke.py {{ARGS}}
@@ -42,6 +46,11 @@ musicldm-smoke *ARGS:
 # A3: cache video tokens, e.g. `just extract-video encoder=vjepa2-large max_segments=100`
 extract-video *ARGS:
     uv run python -m scene_to_score.features.video {{ARGS}}
+
+# B1: CLAP text vectors and hidden states of the films, one folder per variant, e.g.
+# `just extract-text 'variants=[full]' max_films=50`
+extract-text *ARGS:
+    uv run python -m scene_to_score.features.text {{ARGS}}
 
 # A4: train on cached features, e.g. `just train objective=cosine method=video_only-dinov2-cos`
 train *ARGS:
