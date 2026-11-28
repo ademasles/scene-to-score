@@ -16,7 +16,10 @@ from scene_to_score.data.ossl import Clip, read_split, segment_clip
 log = logging.getLogger(__name__)
 
 VALIDATION_FRACTION = 0.1
-VALIDATION_SEED = 0
+# Not 0: the movie subset (data.subset_seed = 0) draws from the same sorted list with
+# random.Random(0), and the two draws then share most of their movies (157 of the 166
+# validation movies fell inside the 400-movie subset). Seed 1 gives the expected ~10 %.
+VALIDATION_SEED = 1
 INDEX_PATTERNS = ["metadata.csv", "splits/train.txt", "splits/test.txt"]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 VALIDATION_MOVIES_PATH = PROJECT_ROOT / "splits" / "val_movies.txt"
