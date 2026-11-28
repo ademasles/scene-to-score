@@ -1,0 +1,31 @@
+# A4: train a fusion + head on cached features (contract 1.6), e.g.
+#   just train video_encoder=vjepa2-large objective=cosine method=video_only-vjepa2-cos
+defaults:
+  - paths: default
+  - data: ossl_v2
+  - _self_
+
+method: video_only-dinov2   # names outputs/preds/<method>/ and outputs/ckpt/<method>/
+condition: video_only       # contract 1.5 condition of the predictions written
+video_encoder: dinov2-large # features_dir/video/<video_encoder>
+fusion: video_mean          # stand-in VideoOnly until feat/fusion lands
+objective: infonce          # infonce | cosine
+n_hypotheses: 1             # K > 1: winner-takes-all multi-hypothesis head
+d_h: 1024
+hidden: 1024
+dropout: 0.1
+
+# Protocol 1.6
+lr: 3.0e-4
+weight_decay: 1.0e-2
+batch_size: 512
+max_epochs: 100
+patience: 10
+seed: 0
+device: auto
+val_movies_file: splits/val_movies.txt
+outputs_dir: outputs
+
+hydra:
+  run:
+    dir: outputs/train/${now:%Y-%m-%d}/${now:%H-%M-%S}

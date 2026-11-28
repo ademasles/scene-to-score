@@ -51,3 +51,7 @@ extract-video *ARGS:
 # `just extract-text 'variants=[full]' max_films=50`
 extract-text *ARGS:
     uv run python -m scene_to_score.features.text {{ARGS}}
+
+# A4: train on cached features, e.g. `just train objective=cosine method=video_only-dinov2-cos`
+train *ARGS:
+    uv run python -m scene_to_score.train {{ARGS}}
